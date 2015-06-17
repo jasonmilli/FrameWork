@@ -1,9 +1,9 @@
 <?php namespace Frame;
 class Model {
-    protected $schema;
-    protected $table;
+    private $schema;
+    private $table;
     private $pdo;
-    protected function __construct() {
+    protected function __construct($schema, $table) {
         $this->pdo = new \PDO("mysql:dbname={$this->schema};host:localhost", 'root', '');
     }
     public function create($record) {
@@ -51,4 +51,31 @@ SQL;
         $prep->execute($params);
         return $prep->fetchAll();
     }
+    public function update($key, $values) {
+        $set = '';
+        $sets = array();
+        foreach ($values as $column => $value) {
+            $set .= '? = ?, ';
+            $sets[] = $column;
+            $sets[] = $value;
+        }
+        $sql = <<<SQL
+UPDATE `?`.`?` SET $set `updated_at` = NOW() WHERE `?` = '?';
+SQL;
+        $primary = substr($this->table, 0, strlen($this->table - 1))."_id";
+        $this->query($sql, array_merge(array($this->schema, $this->table), $sets, array($primary, $key)));
+    }
+    public function delete($key) {
+        $primary = substr($this->table, 0, strlen($this->table - 1))."_id";
+        $sql = <<<SQL
+DELETE FROM `?`.`?` WHERE `?` = '?';
+SQL;
+        $this->query($sql, array($this->schema, $this->table, $primary, $key));
+    }
+    public function join($models, $wheres) {
+        $using = null;
+        $models[] = $this;
+        foreach ($models as $model)
+        foreach ($this->foreign as $foreign) {
+            
 }
