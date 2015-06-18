@@ -3,8 +3,11 @@ class Model {
     private $schema;
     private $table;
     private $pdo;
+    private $primary = null;
+    private $foreigns = array();
     protected function __construct($schema, $table) {
         $this->pdo = new \PDO("mysql:dbname={$this->schema};host:localhost", 'root', '');
+        if (is_null($this->primary)) $this->primary = substr($this->table, 0, strlen($this->table - 1))."_id";
     }
     public function create($record) {
         if (!is_array($record)) throw new \Exception('Create function takes in argument of array');
@@ -13,9 +16,9 @@ class Model {
         $sql = <<<SQL
 INSERT INTO `?`.`?` ($columns, `created_at`, `updated_at`) VALUES($values, NOW(), NOW());
 SQL;
-        $this->query($sql, array_merge(array($this->schema, $this->table), array_keys($record), array_values($record)));
+        return $this->query($sql, array_merge(array($this->schema, $this->table), array_keys($record), array_values($record)));
     }
-    private function placeHolders($columns, $mark = "'") {
+    protected function placeHolders($columns, $mark = "'") {
         $first = true;
         for ($i = 0; $i < count($columns); $i++) {
             if ($first) {
@@ -25,7 +28,7 @@ SQL;
         }
         return $return;
     }
-    public function read($wheres = null) {
+    protected function where($wheres) {
         $where = '';
         if (is_array($wheres)) {
             $first = true;
@@ -40,13 +43,17 @@ SQL;
                 $where .= "`?` = '?'";
             }
         }
-        $sql = <<<SQL
-SELECT * FROM `?`.`?`$where;
-SQL;
-        $result = $this->query($sql, array_merge(array($this->schema, $this->table), $placeholders));
-        print_r($result);
+        return array('wheres' => $where, 'placeholders' => $placeholders);
     }
-    private function query($sql, $params) {
+    public function read($wheres = null) {
+        $wheres = $this->where($wheres);
+        $sql = <<<SQL
+SELECT * FROM `?`.`?`{$wheres['wheres']};
+SQL;
+        return $this->query($sql, array_merge(array($this->schema, $this->table), $wheres['placeholders']));
+    }
+    protected function query($sql, $params) {
+        print_r(array($sql, $params));
         $prep = $this->pdo->prepare($sql);
         $prep->execute($params);
         return $prep->fetchAll();
@@ -55,27 +62,52 @@ SQL;
         $set = '';
         $sets = array();
         foreach ($values as $column => $value) {
-            $set .= '? = ?, ';
+            $set .= "`?` = '?', r";
             $sets[] = $column;
             $sets[] = $value;
         }
         $sql = <<<SQL
 UPDATE `?`.`?` SET $set `updated_at` = NOW() WHERE `?` = '?';
 SQL;
-        $primary = substr($this->table, 0, strlen($this->table - 1))."_id";
-        $this->query($sql, array_merge(array($this->schema, $this->table), $sets, array($primary, $key)));
+        return $this->query($sql, array_merge(array($this->schema, $this->table), $sets, array($this->primary, $key)));
     }
     public function delete($key) {
-        $primary = substr($this->table, 0, strlen($this->table - 1))."_id";
         $sql = <<<SQL
 DELETE FROM `?`.`?` WHERE `?` = '?';
 SQL;
-        $this->query($sql, array($this->schema, $this->table, $primary, $key));
+        return $this->query($sql, array($this->schema, $this->table, $this->primary, $key));
     }
     public function join($models, $wheres) {
-        $using = null;
-        $models[] = $this;
-        foreach ($models as $model)
-        foreach ($this->foreign as $foreign) {
-            
+        $using = '';
+        $using_params = array();
+        $joins = array($this);
+        foreach ($models as $model) {
+            $use = null;
+            foreach ($joins as $join) {
+                foreach ($model->foreigns as $foreign) {
+                    if ($foreign == $join->primary) {
+                        $use = $foreign;
+                        break 2;
+                    }
+                }
+                foreach ($join->foreigns as $foreign) {
+                    if ($foreign == $model->primary) {
+                        $use = $foreign;
+                        break 2;
+                    }
+                }
+            }
+            if (is_null($use)) {
+                throw new \Exception("No Foreign key link found for `{$model->schema}`.`{$model->table}`");
+            }
+            $joins[] = $model;
+            $using .= " JOIN `?`.`?` USING(`?`)";
+            $using_params = array_merge($using_params, array($model->schema, $model->table, $use));
+        }
+        $wheres = $this->where($wheres);
+        $sql = <<<SQL
+SELECT * FROM `?`.`?`$join {$wheres['wheres']};
+SQL;
+        return $this->query($sql, array_merge(array($this->schema, $this->table), $using_params, $wheres['placeholders']));
+    }
 }
