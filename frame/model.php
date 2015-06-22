@@ -6,25 +6,27 @@ class Model {
     private $primary = null;
     private $foreigns = array();
     protected function __construct($schema, $table) {
+        $this->schema = $schema;
+        $this->table = $table;
         $this->pdo = new \PDO("mysql:dbname={$this->schema};host:localhost", 'root', '');
         if (is_null($this->primary)) $this->primary = substr($this->table, 0, strlen($this->table - 1))."_id";
     }
     public function create($record) {
         if (!is_array($record)) throw new \Exception('Create function takes in argument of array');
-        $columns = $this->placeHolders($record, "`");
+        $columns = implode('`, `', array_keys($record));
         $values = $this->placeHolders($record, "'");
         $sql = <<<SQL
-INSERT INTO `?`.`?` ($columns, `created_at`, `updated_at`) VALUES($values, NOW(), NOW());
+INSERT INTO `{$this->schema}`.`{$this->table}` (`$columns`, `created_at`, `updated_at`) VALUES($values, NOW(), NOW());
 SQL;
-        return $this->query($sql, array_merge(array($this->schema, $this->table), array_keys($record), array_values($record)));
+        return $this->query($sql, array_values($record));
     }
     protected function placeHolders($columns, $mark = "'") {
         $first = true;
         for ($i = 0; $i < count($columns); $i++) {
             if ($first) {
-                $return = '?';
+                $return = $mark.'?'.$mark;
                 $first = false;
-            } else $return .= ',?';
+            } else $return .= ','.$mark.'?'.$mark;
         }
         return $return;
     }
