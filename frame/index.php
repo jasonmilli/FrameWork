@@ -16,10 +16,10 @@ class {$parts[3]} extends \\Frame\\Model {
 }
 PHP;
         eval($php);
-        //eval("namespace {$parts[0]}\\{$parts[1]}\\{$parts[2]}; class {$parts[3]} extends \\Frame\\Model { public function __construct() { parent::__construct(strtolower('{$parts[2]}'), strtolower('{$parts[3]}'); } }");
     } else {
         print_r($parts);
         throw new Exception("File not found: $file");
     }
 }
-//$model = new Frame\Model;
+chdir(__DIR__);
+require '../work/main.php';
